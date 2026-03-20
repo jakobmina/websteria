@@ -4,19 +4,38 @@ from qiskit.visualization import plot_histogram
 from templates.script import qc_transpiled
 from matplotlib.pyplot import plot as plt
 import numpy as np
+from typing import Callable
+from math import log 
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from scipy.spatial.distance import minkowski
+from qiskit.quantum_info import Statevector
+from scipy.spatial.distance import mahalanobis
 # Crear un circuito cuántico con 3 qubits (2 qubits de datos y 1 qubit auxiliar)
-qc = qiskit.QuantumCircuit(3)
+qc = qiskit.QuantumCircuit(3, 3)
+# angulos de rotacion
+phi = (1+np.sqrt(5))/2 # azimutal
+pi = np.pi # axioma vertical 
+cos = np.cos # axioma horizontal
+n=np.arange(1,6)
+# Inicializar el circuito
+qc.h(0)
+qc.h(1)
+qc.h(2)
 
-# Inicializar el circuito (puedes personalizar esta parte)
-qc.x(1)  # Estado inicial del primer qubit
-qc.x(0)  # Estado inicial del segundo qubit
+qc.ccx(1, 2, 0)  # Estado inicial del primer qubit
+qc.y(2)  # Estado inicial del segundo qubit
+qc.rz(2*pi*phi**2, 0)
+qc.ry(2*pi*phi**3, 1)
+qc.rx(2*pi*phi**4, 2)
 
 # Aplicar puertas Toffoli y X en un bucle
-for _ in range(50):  # Número de iteraciones
+for i in n:  # Número de iteraciones
     # Aplicar la puerta Toffoli (control: qubit 0 y 1, objetivo: qubit 2)
-    qc.ccx(0, 1, 2)  # Toffoli
+    qc.ccx(0, 2, 1)  # Toffoli
     # Aplicar la puerta X al qubit auxiliar
-    qc.x(2)  # Invertir el estado del qubit auxiliar
+    qc.cswap(0, 1, 2)  # Invertir el estado del qubit auxiliar
 
 # Medir todos los qubits
 qc.measure_all()
@@ -45,13 +64,7 @@ print(counts)
 plot_histogram(counts)
 
 """representacion basica del codigo del circuito base"""
-from math import log
-
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
-from scipy.spatial.distance import minkowski
-
+ 
 # --- 1. Qubit State Representation ---
 
 def initialize_node():
@@ -98,9 +111,9 @@ def activate_node_with_ccx(node):
 # use Mahalanobis distance
 
 # define the average
-data = np.array
+data = np.random.rand(10, 2)
 # Calcular la matriz de covarianza
-covariance_matrix = np.cov
+covariance_matrix = np.cov(data.T)
 
 # Calcular la inversa de la matriz de covarianza (necesaria para la distancia de Mahalanobis)
 try:
@@ -114,15 +127,7 @@ action = np.array([2.0, 3.0])
 # Calcular la distancia de Mahalanobis (simplificado)
 mahalanobis_distance = np.sqrt(np.dot(np.dot((action[:2] - np.pi/21), inverse_covariance), (action[:2] - np.pi/21)))
 
-
-def conway_rules(node, active_neighbors):
-    """
-    Applies Conway's Game of Life-like rules to determine the next state of a node.
-    Args:
-        node: The current state of the node.
-        active_neighbors: The number of active neighbors.
-    Returns: The next state of the node.
-    """
+def neighbor_activation(node, active_neighbors):
     if is_active(node):  # Existing state is active
         if active_neighbors < 2 or active_neighbors > 3:
             return node  # Deactivate (in this example, do nothing)
@@ -163,7 +168,142 @@ def calculate_neighbors(network, layer_index, node_index, p=2):
     return active_neighbors
 
 
-# --- Calculate Entropy with Shannon ---
+ 
+class MetriplecticSystem4Bracket:
+    """
+    Morrison's 4-bracket metriplectic structure.
+    
+    Ecuación de movimiento:
+        ẋ = J·∇H + K·∇S
+    
+    Donde:
+        J = tensor de Poisson (antisimétrico)
+        K = tensor métrico (simétrico, semi-def. positivo)
+    
+    Condiciones de degeneración:
+        J·∇S = 0   (S es Casimir de Poisson)
+        K·∇H = 0   (H en kernel métrico)
+    """
+
+    def __init__(self, dim: int, J: np.ndarray, K: np.ndarray):
+        self.dim = dim
+        self.J = J  # Poisson tensor [antisimétrico]
+        self.K = K  # Metric tensor  [simétrico, ≥0]
+        self._validate_tensors()
+
+    def _validate_tensors(self):
+        assert np.allclose(self.J, -self.J.T), "J debe ser antisimétrico"
+        assert np.allclose(self.K, self.K.T),  "K debe ser simétrico"
+        eigvals = np.linalg.eigvalsh(self.K)
+        assert np.all(eigvals >= -1e-10),       "K debe ser semi-definido positivo"
+
+    # ── Brackets fundamentales ──────────────────────────────────────────────
+
+    def poisson_bracket(self, F: Callable, G: Callable, x: np.ndarray,
+                        eps: float = 1e-6) -> float:
+        """
+        {F, G} = ∇F · J · ∇G   [antisimétrico]
+        """
+        grad_F = self._gradient(F, x, eps)
+        grad_G = self._gradient(G, x, eps)
+        return float(grad_F @ self.J @ grad_G)
+
+    def metric_bracket(self, F: Callable, G: Callable, x: np.ndarray,
+                       eps: float = 1e-6) -> float:
+        """
+        (F, G) = ∇F · K · ∇G   [simétrico]
+        """
+        grad_F = self._gradient(F, x, eps)
+        grad_G = self._gradient(G, x, eps)
+        return float(grad_F @ self.K @ grad_G)
+
+    def four_bracket(self, F: Callable, H: Callable, S: Callable,
+                     x: np.ndarray, eps: float = 1e-6) -> float:
+        """
+        4-bracket metripléxico [F; H, S]:
+            [F; H, S] = {F, H} + (F, S)
+        
+        Este es el bracket de Morrison que unifica la dinámica
+        reversible (Poisson) con la irreversible (métrica/entropía).
+        """
+        pb = self.poisson_bracket(F, H, x, eps)
+        mb = self.metric_bracket(F, S, x, eps)
+        return pb + mb
+
+    # ── Evolución temporal ──────────────────────────────────────────────────
+
+    def equations_of_motion(self, H: Callable, S: Callable,
+                             x: np.ndarray, eps: float = 1e-6) -> np.ndarray:
+        """
+        ẋ = J·∇H + K·∇S
+        """
+        grad_H = self._gradient(H, x, eps)
+        grad_S = self._gradient(S, x, eps)
+        return self.J @ grad_H + self.K @ grad_S
+
+    def integrate(self, H: Callable, S: Callable, x0: np.ndarray,
+                  dt: float = 0.01, steps: int = 1000) -> np.ndarray:
+        """
+        Integrador RK4 con monitoreo de degeneración doble.
+        """
+        trajectory = np.zeros((steps + 1, self.dim))
+        trajectory[0] = x0.copy()
+        x = x0.copy()
+
+        for i in range(steps):
+            k1 = self.equations_of_motion(H, S, x, dt * 0.1)
+            k2 = self.equations_of_motion(H, S, x + 0.5 * dt * k1, dt * 0.1)
+            k3 = self.equations_of_motion(H, S, x + 0.5 * dt * k2, dt * 0.1)
+            k4 = self.equations_of_motion(H, S, x + dt * k3, dt * 0.1)
+            x = x + (dt / 6) * (k1 + 2*k2 + 2*k3 + k4)
+            trajectory[i + 1] = x
+
+        return trajectory
+
+    # ── Verificación de condiciones de degeneración ─────────────────────────
+
+    def verify_degeneracy(self, H: Callable, S: Callable,
+                          x: np.ndarray, eps: float = 1e-6) -> dict:
+        """
+        Verifica las condiciones de doble degeneración de Morrison:
+            J·∇S ≈ 0   (S Casimir de Poisson)
+            K·∇H ≈ 0   (H en kernel métrico)
+        """
+        grad_H = self._gradient(H, x, eps)
+        grad_S = self._gradient(S, x, eps)
+
+        J_grad_S = self.J @ grad_S   # debe → 0
+        K_grad_H = self.K @ grad_H   # debe → 0
+
+        return {
+            "J·∇S":        J_grad_S,
+            "K·∇H":        K_grad_H,
+            "|J·∇S|":      np.linalg.norm(J_grad_S),
+            "|K·∇H|":      np.linalg.norm(K_grad_H),
+            "degeneracy_ok": (np.linalg.norm(J_grad_S) < 1e-8 and
+                               np.linalg.norm(K_grad_H) < 1e-8)
+        }
+
+    def entropy_production_rate(self, S: Callable, x: np.ndarray,
+                                eps: float = 1e-6) -> float:
+        """
+        dS/dt = (S, S) = ∇S · K · ∇S  ≥ 0  [segunda ley]
+        """
+        return self.metric_bracket(S, S, x, eps)
+
+    # ── Utilidades ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _gradient(F: Callable, x: np.ndarray, eps: float = 1e-6) -> np.ndarray:
+        """Gradiente numérico por diferencias centradas."""
+        grad = np.zeros_like(x)
+        for i in range(len(x)):
+            xp, xm = x.copy(), x.copy()
+            xp[i] += eps
+            xm[i] -= eps
+            grad[i] = (F(xp) - F(xm)) / (2 * eps)
+        return grad
+    
 
 def shannon_entropy(data, average = 'p'):
     """
@@ -190,7 +330,7 @@ def shannon_entropy(data, average = 'p'):
     return entropy
 
 
-print(f"Entropía de Shannon:, {shannon_entropy(data)}")
+print(f"Entropía de Shannon:, {shannon_entropy(data.flatten().tolist())}")
 
 
 def calculate_cosines(entropy, env_value):
