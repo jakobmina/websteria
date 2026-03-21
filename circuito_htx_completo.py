@@ -29,7 +29,7 @@ qc.y(2)  # Estado inicial del segundo qubit
 qc.rz(2*pi*phi**2, 0)
 qc.ry(2*pi*phi**3, 1)
 qc.rx(2*pi*phi**4, 2)
-
+qc.cswap(1,0,2)
 # Aplicar puertas Toffoli y X en un bucle
 for i in n:  # Número de iteraciones
     # Aplicar la puerta Toffoli (control: qubit 0 y 1, objetivo: qubit 2)

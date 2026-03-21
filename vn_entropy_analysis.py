@@ -19,28 +19,29 @@ import json
 import os
 
 # ── Constantes H7 ────────────────────────────────────────────────────────────
-φ     = (1 + np.sqrt(5)) / 2
-DRIFT = 7 - 2 * np.pi
-O_N   = abs(np.cos(np.pi * φ))       # O_n_integrity ≈ 0.3624
+φ     = (1 +(np.sqrt(5))) / 2
+pi    = np.pi
+cos   = np.cos
+DRIFT = 7 - 2 * pi
+O_N   = abs(cos(pi * φ))       # O_n_integrity ≈ 0.3624
 
-def psi(n): return np.cos(np.pi * φ * n)
+def psi(n): return cos(pi * φ * n)
 def theta(n): return 2 * np.arccos(np.clip(psi(n), -1, 1))
 
 
 def build_circuit(n_H: int, n_S: int) -> QuantumCircuit:
     """Mismo circuito metripléxico — sin medición para extraer ρ."""
-    q_H = QuantumRegister(2, 'q_H')
-    q_S = QuantumRegister(2, 'q_S')
+    q_H = QuantumRegister(1, 'q_H')
+    q_S = QuantumRegister(3, 'q_S')
     q_Z = QuantumRegister(1, 'q_Z')
     qc  = QuantumCircuit(q_H, q_S, q_Z)
 
     qc.h(q_H); qc.h(q_S); qc.h(q_Z)
-    qc.ry(theta(n_H), q_H[0]); qc.rz(np.pi * φ, q_H[1])
-    qc.ry(theta(n_S), q_S[0]); qc.rz(-np.pi * φ, q_S[1])
-    qc.cx(q_H[0], q_H[1]); qc.cz(q_H[0], q_Z[0])
-    qc.cx(q_S[0], q_S[1]); qc.cz(q_S[0], q_Z[0])
-    qc.rz(DRIFT, q_Z[0])
-    qc.cx(q_H[1], q_S[0]); qc.cx(q_S[1], q_H[0])
+    qc.rz(theta(n_H), q_H[0])
+    qc.ry(theta(n_S), q_S[2]); qc.rz(-pi * φ, q_S[1])
+    qc.cx(q_H[0], q_S[0]); qc.cz(q_H[0], q_Z[0])
+    qc.ccx(q_S[0], q_S[1], q_Z[0])
+    qc.rx(DRIFT, q_Z[0])
     return qc
 
 
