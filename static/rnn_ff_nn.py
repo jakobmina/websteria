@@ -1,3 +1,6 @@
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import SimpleRNN, Dense
+import tensorflow as tf
 # definir parametros.
 rnn_units = 50
 dense_units = 1
