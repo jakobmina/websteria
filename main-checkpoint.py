@@ -5,17 +5,21 @@ from qiskit.primitives import StatevectorSampler
 from qiskit.primitives import StatevectorEstimator
 from qiskit.quantum_info import SparsePauliOp
 
-from circuito_htx_completo import data
+from souldierAI.neuralQ.circuito_htx_completo import data
 
 # 1. Define the observable to be measured
 operator = SparsePauliOp.from_list([("XXY", 1), ("XYX", 1), ("YXX", 1), ("YYY", -1)])
-qc = qiskit.QuantumCircuit(4)
-qc.h(0)  # generate superposition
-qc.p(np.pi / 2, 2)  # add quantum phase
-qc.cx(1, 0)  # 0th-qubit-Controlled-NOT gate on 1st qubit
-qc.cx(0, 1)  # 0th-qubit-Controlled-NOT gate on 2nd qubit
-qc.ccx(1, 2, 0)  # 1st-qubit-Controlled-NOT gate on 2nd qubit
-qc.ccx(2, 3, 1)  # 2nd-qubit-Controlled-NOT gate on 3rd qubit
+qc = qiskit.QuantumCircuit(3,3)
+qc.h(0)
+qc.h(1)
+qc.h(2)  # generate superposition
+qc.p(np.pi * 1.618,  0)
+  # add quantum phase
+qc.rz(np.pi * 1.618, 1)  # 0th-qubit-Controlled-NOT gate on 1st qubit
+qc.ccx(0, 1, 2)  # 0th-qubit-Controlled-NOT gate on 2nd qubit
+qc.ry(np.pi * 1.618, 2)  # 1st-qubit-Controlled-NOT gate on 2nd qubit
+qc.rx(np.pi * 1.618, 2) 
+qc.cswap(0,1,2) # 2nd-qubit-Controlled-NOT gate on 3rd qubit
 
 qc_transpiled = transpile(qc)
 
@@ -28,9 +32,9 @@ sampler = StatevectorSampler().run([qc_measured])
 estimator = StatevectorEstimator()
 job = estimator.run([(qc, operator)], precision=1e-3)
 result = [sampler.result(),job.result()]
-expectation_value = result[0].data["evs"].real
+expectation_value = result[0]["evs"].real
 print(f"Expectation values: {expectation_value}")
-print(f" > Counts: {result[0].data["evs"].binary_probabilities()}")
+print(f" > Counts: {result[0]("evs").binary_probabilities()}")
 print(qc, operator)
 print(qc_measured, qc_transpiled)
 
